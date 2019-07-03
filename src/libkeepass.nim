@@ -67,35 +67,29 @@ type
     streamStartBytes: string
     encrypted: string
   HeaderBytes = string
-  Entry = ref object
-    title: string
-    username: string
-    password: string
-    url: string
-    notes: string
 
 proc add(header: var HeaderBytes, d: uint8) =
   header.add d.chr
 
 proc add(header: var HeaderBytes, d: uint16) =
-  header.add d.uint8
-  header.add((d shr 8).uint8)
+  header.add (0xFF'u16 and d).uint8
+  header.add (0xFF'u16 and (d shr 8)).uint8
 
 proc add(header: var HeaderBytes, d: uint32) =
-  header.add d.uint8
-  header.add((d shr 8).uint8)
-  header.add((d shr 16).uint8)
-  header.add((d shr 24).uint8)
+  header.add (0xFF'u32 and d).uint8
+  header.add (0xFF'u32 and (d shr 8)).uint8
+  header.add (0xFF'u32 and (d shr 16)).uint8
+  header.add (0xFF'u32 and (d shr 24)).uint8
 
 proc add(header: var HeaderBytes, d: uint64) =
-  header.add d.uint8
-  header.add((d shr 8).uint8)
-  header.add((d shr 16).uint8)
-  header.add((d shr 24).uint8)
-  header.add((d shr 32).uint8)
-  header.add((d shr 40).uint8)
-  header.add((d shr 48).uint8)
-  header.add((d shr 56).uint8)
+  header.add (0xFF'u64 and d).uint8
+  header.add (0xFF'u64 and (d shr 8)).uint8
+  header.add (0xFF'u64 and (d shr 16)).uint8
+  header.add (0xFF'u64 and (d shr 24)).uint8
+  header.add (0xFF'u64 and (d shr 32)).uint8
+  header.add (0xFF'u64 and (d shr 40)).uint8
+  header.add (0xFF'u64 and (d shr 48)).uint8
+  header.add (0xFF'u64 and (d shr 56)).uint8
 
 proc add(header: var HeaderBytes, d: string) =
   for b in d:
@@ -116,6 +110,8 @@ proc readDatabase*(s: Stream, password: string): seq[XmlNode] =
   let
     minor = s.readUint16
     major = s.readUint16
+  if minor != 1 and major != 3:
+    error "Only version 3.1 databases supported"
   headerData.add m
   headerData.add v
   headerData.add minor
@@ -192,9 +188,12 @@ proc readDatabase*(s: Stream, password: string): seq[XmlNode] =
     error "Could not set AES encode key"
   var transformedKey = compKey
   # This is the slow part. A faster implementation of encryptECB should speed this up
+  var
+    o1 = cast[cstring](cast[ptr array[0..2+32, int]](transformedKey)[][2].addr)
+    o2 = cast[cstring](cast[ptr array[0..2+32, int]](transformedKey)[][2+2].addr)
   for i in 0..<dynamicHeader.transformrounds.int:
-    let oldKey = transformedKey
-    transformedKey = aes.encryptECB(oldKey[0..15]) & aes.encryptECB(oldKey[16..31])
+    aes.encryptECB(o1, o1)
+    aes.encryptECB(o2, o2)
   transformedKey = $computeSha256(transformedKey)
   let masterKey = $computeSha256(dynamicHeader.masterseed & $transformedKey)
   aes = initAes()
@@ -282,7 +281,6 @@ when isMainModule:
     db = readDatabase(s, commandLineParams()[1])
   for xml in db:
     for group in xml.child("Root"):
-      var path = ""
       proc parseGroup(group: XmlNode, path: string) =
         let name =
           if group.child("Name") == nil:
