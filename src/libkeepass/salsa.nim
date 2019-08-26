@@ -27,10 +27,10 @@ proc littleEndian[T](b: T, o: int): uint32 {.inline.} =
   return b[o+0].uint32 + b[o+1].uint32 shl 8 + b[o+2].uint32 shl 16 + b[o+3].uint32 shl 24
 
 template revLittleEndian[T](b: var T, o: int, w: uint32) =
-  b[o+0] = w.uint8
-  b[o+1] = (w shr 8).uint8
-  b[o+2] = (w shr 16).uint8
-  b[o+3] = (w shr 24).uint8
+  b[o+0] = (w and 0xff).uint8
+  b[o+1] = (w shr 8 and 0xff).uint8
+  b[o+2] = (w shr 16 and 0xff).uint8
+  b[o+3] = (w shr 24 and 0xff).uint8
 
 proc hash(s: var array[64, uint8]) =
   var
@@ -87,10 +87,6 @@ proc expand(k: array[32, uint8], n: array[16, uint8], keystream: var array[64, u
     keystream[24+i] = n[i]
 
   hash(keystream)
-
-type
-  Status {.pure.} = enum
-    Sucess, Failure
 
 proc crypt*[T](key: T, nonce: array[8, uint8], si: uint32, buf: var seq[uint8]) =
   var
