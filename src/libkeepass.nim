@@ -110,7 +110,8 @@ proc readDatabase*(s: Stream, password: string): seq[XmlNode] =
   let
     minor = s.readUint16
     major = s.readUint16
-  if minor != 1 and major != 3:
+  if minor != 1 or major != 3:
+    # TODO: Update to work with version 4 of the format: https://keepass.info/help/kb/kdbx_4.html
     error "Only version 3.1 databases supported"
   headerData.add m
   headerData.add v
@@ -189,8 +190,8 @@ proc readDatabase*(s: Stream, password: string): seq[XmlNode] =
   var transformedKey = compKey
   # This is the slow part. A faster implementation of encryptECB should speed this up
   var
-    o1 = cast[cstring](cast[ptr array[0..2+32, int]](transformedKey)[][2].addr)
-    o2 = cast[cstring](cast[ptr array[0..2+32, int]](transformedKey)[][2+2].addr)
+    o1 = cast[cstring](transformedKey[0].addr)
+    o2 = cast[cstring](transformedKey[16].addr)
   for i in 0..<dynamicHeader.transformrounds.int:
     aes.encryptECB(o1, o1)
     aes.encryptECB(o2, o2)
