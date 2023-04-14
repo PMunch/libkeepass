@@ -89,6 +89,7 @@ type
     nonce: array[12, byte]
     key: array[32, byte]
     pos: uint32
+    counter: Counter
   CryptoStreamKind = enum Salsa, ChaCha
   CryptoStream = object
     case kind: CryptoStreamKind
@@ -152,7 +153,13 @@ proc decrypt(cryptoStream: var CryptoStream, data: var seq[uint8]) =
     crypt(cryptoStream.salsa.key, cryptoStream.salsa.iv, cryptoStream.salsa.pos, data)
     cryptoStream.salsa.pos += data.len.uint32
   of ChaCha:
-    cryptoStream.chacha.pos += chacha20(cryptoStream.chacha.key, cryptoStream.chacha.nonce, cryptoStream.chacha.pos, data, data)
+    let origLen = data.len
+    var dataToCrypt = ' '.byte.repeat(cryptoStream.chacha.pos.int) & data
+    data.setLen dataToCrypt.len
+    cryptoStream.chacha.counter = chacha20(cryptoStream.chacha.key, cryptoStream.chacha.nonce, cryptoStream.chacha.counter, dataToCrypt, data)
+    data = data[cryptoStream.chacha.pos..^1]
+    cryptoStream.chacha.pos += origLen.uint32
+    cryptoStream.chacha.pos = cryptoStream.chacha.pos mod 64
 
 proc cryptoStream(header: DynamicHeader): CryptoStream =
   case header.innerEncryption:
@@ -392,8 +399,8 @@ proc readDatabase*(s: Stream, password: string): seq[XmlNode] =
         of 0x02:
           dynamicHeader.protectedStreamKey = cast[string](ss.readBytes(length.int))
         else:
-          echo itemType
-          echo ss.readBytes(length.int)
+          #echo itemType
+          discard ss.readBytes(length.int)
       discard ss.readUint32 # The length of the null end block
       var cryptoStream = dynamicHeader.cryptoStream
       result &= parseBody(ss, headerData, dynamicHeader, cryptoStream)
