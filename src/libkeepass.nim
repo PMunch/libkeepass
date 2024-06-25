@@ -1,4 +1,4 @@
-import streams, strutils, sequtils, base64, xmltree, xmlparser, tables
+import streams, strutils, sequtils, base64, xmltree, xmlparser, tables, strtabs
 import nimcrypto / [hash, sha2, hmac, bcmode, rijndael]
 import chacha20
 import zip/zlib
@@ -186,18 +186,21 @@ proc parseEntry(entry: XmlNode, cryptoStream: var CryptoStream) =
           valueTag = field.child("Value")
           key = keyTag.innerText
           value = valueTag.innerText
-        case key:
-          of "Password":
-            let pwData = value.decode
-            var pwBytes = newSeq[uint8](pwData.len)
-            for i in 0..<pwBytes.len:
-              pwBytes[i] = pwData[i].uint8
-            cryptoStream.decrypt(pwBytes)
-            var pwString = newStringOfCap(pwBytes.len)
-            for i in 0..<pwBytes.len:
-              pwString.add pwBytes[i].char
-            if valueTag.len != 0:
-              valueTag[0].text = xmltree.escape(pwString)
+          protected = block:
+            let attrs = valueTag.attrs
+            if attrs == nil: key == "Password"
+            else: attrs.hasKey("Protected")
+        if protected:
+          let pwData = value.decode
+          var pwBytes = newSeq[uint8](pwData.len)
+          for i in 0..<pwBytes.len:
+            pwBytes[i] = pwData[i].uint8
+          cryptoStream.decrypt(pwBytes)
+          var pwString = newStringOfCap(pwBytes.len)
+          for i in 0..<pwBytes.len:
+            pwString.add pwBytes[i].char
+          if valueTag.len != 0:
+            valueTag[0].text = xmltree.escape(pwString)
       of "History":
         for innerEntry in field:
           parseEntry(innerEntry, cryptoStream)
