@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.3.0"
+version       = "0.4.0"
 author        = "Peter Munch-Ellingsen"
 description   = "Library for reading KeePass files and decrypt the passwords within it"
 license       = "MIT"
